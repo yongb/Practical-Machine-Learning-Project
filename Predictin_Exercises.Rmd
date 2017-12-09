@@ -1,0 +1,93 @@
+---
+title: 'Practical Machine Learning Project: Predicting Exercises'
+author: "Yong Bao"
+date: "June 5, 2016"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Executive Summary
+The goal of this project is to predict the manner in which the exercises were done based on a training data set obtained from the source:http://groupware.les.inf.puc-rio.br/har. The specific steps are following:
+1. Explore the training data set;
+2. Model selection via cross validation;
+3. Model validation using a test data set.
+
+1. Explore the training data set;
+```{r}
+library(caret)
+setwd("C:/Users/Yong/Downloads")
+train <- read.csv("pml-training.csv")
+test <- read.csv("pml-testing.csv")
+dim(train); dim(test)
+```
+
+The total number of variables is 160 with great percentages of missing values in most of the variables. All variables with missing rate > 95% have to be removed.
+```{r}
+maxNAPerc = 95
+maxNACount <- nrow(train) / 100 * maxNAPerc
+removeColumns <- which(colSums(is.na(train) | train=="") > maxNACount)
+train2 <- train[,-removeColumns]
+test2 <- test[,-removeColumns]
+str(train2)
+str(test2)
+# remove the variables that are unlikely to be used as predictors in the model
+train3 <- train2[,-(1:5)]
+test3 <- test2[,-(1:5)]
+```
+
+2. Model selection via cross validation;
+
+```{r}
+set.seed(911)
+par <- createDataPartition(y=train3$classe, p=0.7, list=F)
+train4 <- train3[par, ]
+test4 <- train3[-par, ]
+```
+
+Fisrt try Random Forest model using 5-fold cross validation
+```{r}
+library(randomForest)
+library(ggplot2)
+library(rattle)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+library(RColorBrewer)
+RFFit <- train(classe ~ ., data = train4, method = "rf", trControl = trainControl(method = "cv", 5), ntree = 250)
+RFFit
+predictRF <- predict(RFFit, test4)
+confusionMatrix(test4$classe, predictRF)
+accuracy <- postResample(predictRF, test4$classe)
+ose <- 1 - as.numeric(confusionMatrix(test4$classe, predictRF)$overall[1])
+paste("Accuracy of Random Forest is: ",accuracy, "and out-of-sample error is: ", ose)
+rm(predictRF)
+```
+
+Next try Decision Tree model
+```{r}
+TreeFit <- rpart(classe ~ ., data = train4, method = "class")
+prp(TreeFit)
+predictTree <- predict(TreeFit, test4, type = "class")
+confusionMatrix(test4$classe, predictTree)
+accuracy <- postResample(predictTree, test4$classe)
+ose <- 1 - as.numeric(confusionMatrix(test4$classe, predictTree)$overall[1])
+paste("Accuracy of Decision Tree is: ",accuracy, "and out-of-sample error is: ", ose)
+rm(predictTree)
+rm(modelTree)
+```
+
+By comparing the accuracy and out-of-sample error in Random Forest and Decision Tree, Random Forest model is better than Decision Tree.
+
+
+3. Model validation using a test data set.
+```{r}
+rm(accuracy)
+rm(ose)
+predict(RFFit, test3[, -length(names(test3))])
+```
+
